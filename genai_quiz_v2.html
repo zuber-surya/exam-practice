@@ -347,6 +347,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
               <option value="seq">Sequential Q1 → Q85</option>
             </select>
           </div>
+          <div class="field" id="ex-range-from-wrap" style="display:none"><label>From Q</label><input type="number" id="ex-from" value="1" min="1" max="85"></div>
+          <div class="field" id="ex-range-to-wrap" style="display:none"><label>To Q</label><input type="number" id="ex-to" value="85" min="1" max="85"></div>
         </div>
         <button class="btn btn-amber" style="width:100%;padding:13px;font-size:14px" onclick="startExam()">Start Exam →</button>
       </div>
@@ -550,6 +552,7 @@ async function loadCache() {
 let pIdx      = 0;        // practice index into QS
 let pSel      = [];       // selected letters (temp, before submit)
 let pRevealed = false;    // true = answer peeked but not yet saved
+let pReviewMode = false;  // true = reviewing an exam result (read-only)
 let eQs       = [];       // exam question list
 let eIdx      = 0;        // exam current index
 let eAnswers  = {};       // {qId:[letters]}
@@ -558,6 +561,9 @@ let eDur      = 0;        // seconds
 let eTimerFn  = null;
 let activeTab = 'practice';
 let searchResults = null; // null = not searching, [] = results
+
+let lastExamRec = null;   // most recently shown results record
+let lastExamByQ = {};     // { [qId]: {id, selected, correct, answer} }
 
 // ═══════════════════════════════════════════════
 //  UTILITIES
@@ -687,6 +693,7 @@ function beginPractice(qId) {
   pIdx = idx;
   pSel = [];
   pRevealed = false;
+  pReviewMode = false;
   activeTab = 'practice';
   ['practice','exam','history','data'].forEach(t => {
     document.getElementById('tab-' + t)?.classList.toggle('active', t === 'practice');
@@ -694,6 +701,25 @@ function beginPractice(qId) {
   document.getElementById('pnav').classList.add('show');
   document.getElementById('enav').classList.remove('show');
   document.getElementById('mode-label').textContent = 'PRACTICE';
+  document.getElementById('mode-label').className = 'tb-mode';
+  renderPractice();
+}
+
+function beginExamReview(qId) {
+  const r = lastExamByQ[qId];
+  const idx = QS.findIndex(q => q.id === qId);
+  if (idx === -1 || !r) return;
+  pIdx = idx;
+  pSel = Array.isArray(r.selected) ? [...r.selected] : [];
+  pRevealed = true;
+  pReviewMode = true;
+  activeTab = 'review';
+  ['practice','exam','history','data'].forEach(t => {
+    document.getElementById('tab-' + t)?.classList.toggle('active', false);
+  });
+  document.getElementById('pnav').classList.remove('show');
+  document.getElementById('enav').classList.remove('show');
+  document.getElementById('mode-label').textContent = 'REVIEW';
   document.getElementById('mode-label').className = 'tb-mode';
   renderPractice();
 }
@@ -755,15 +781,28 @@ function renderPractice() {
     const ansSorted = [...q.correct].sort();
     const isOk = JSON.stringify(selSorted) === JSON.stringify(ansSorted);
     fb.classList.add('show', isOk ? 'ok' : 'err');
-    fb.innerHTML = isOk
-      ? `✓ That's correct! Submit to save your answer.`
-      : `✗ Incorrect — Correct answer: <strong>${q.correct.join(', ')}</strong>. Submit to record your attempt.`;
+    if (pReviewMode) {
+      fb.innerHTML = isOk
+        ? `✓ Correct — You: <strong>${pSel.join(', ')}</strong> · Correct: <strong>${q.correct.join(', ')}</strong>`
+        : `✗ Wrong — You: <strong>${pSel.join(', ')}</strong> · Correct: <strong>${q.correct.join(', ')}</strong>`;
+    } else {
+      fb.innerHTML = isOk
+        ? `✓ That's correct! Submit to save your answer.`
+        : `✗ Incorrect — Correct answer: <strong>${q.correct.join(', ')}</strong>. Submit to record your attempt.`;
+    }
   }
 
   // actions
   const acts = document.getElementById('pq-actions');
   acts.innerHTML = '';
 
+  if (pReviewMode) {
+    const backBtn = document.createElement('button');
+    backBtn.className = 'btn btn-ghost';
+    backBtn.textContent = '← Back to Results';
+    backBtn.onclick = () => { if (lastExamRec) showResults(lastExamRec); };
+    acts.appendChild(backBtn);
+  } else
   if (pr) {
     // Already permanently saved — just show Reset
     const rb = document.createElement('button');
@@ -881,12 +920,45 @@ function navQ(dir) {
 // ═══════════════════════════════════════════════
 //  EXAM
 // ═══════════════════════════════════════════════
+function toggleExamRangeUI() {
+  const orderEl = document.getElementById('ex-order');
+  const fromWrap = document.getElementById('ex-range-from-wrap');
+  const toWrap = document.getElementById('ex-range-to-wrap');
+  const fromEl = document.getElementById('ex-from');
+  const toEl = document.getElementById('ex-to');
+  if (!orderEl || !fromWrap || !toWrap || !fromEl || !toEl) return;
+
+  const maxQ = QS.length || 85;
+  fromEl.max = String(maxQ);
+  toEl.max = String(maxQ);
+  if (!fromEl.value) fromEl.value = '1';
+  if (!toEl.value) toEl.value = String(maxQ);
+
+  const show = orderEl.value !== 'random';
+  fromWrap.style.display = show ? '' : 'none';
+  toWrap.style.display = show ? '' : 'none';
+}
+
 function startExam() {
-  const count = Math.min(parseInt(document.getElementById('ex-count').value)||65, QS.length);
+  let count = Math.min(parseInt(document.getElementById('ex-count').value)||65, QS.length);
   const mins  = parseInt(document.getElementById('ex-time').value)||130;
   const order = document.getElementById('ex-order').value;
   let pool = [...QS];
-  if (order === 'random') pool = pool.sort(() => Math.random()-.5);
+
+  if (order === 'random') {
+    pool = pool.sort(() => Math.random() - .5);
+  } else {
+    // sequential with user-selected range
+    const maxQ = QS.length || 85;
+    let from = parseInt(document.getElementById('ex-from')?.value) || 1;
+    let to = parseInt(document.getElementById('ex-to')?.value) || maxQ;
+    from = Math.max(1, Math.min(from, maxQ));
+    to = Math.max(1, Math.min(to, maxQ));
+    if (from > to) [from, to] = [to, from];
+    pool = QS.filter(q => q.id >= from && q.id <= to);
+    count = Math.min(count, pool.length);
+  }
+
   eQs = pool.slice(0, count);
   eIdx = 0; eAnswers = {}; eDur = mins*60; eStart = Date.now();
   document.getElementById('mode-label').textContent = 'EXAM';
@@ -988,6 +1060,9 @@ async function submitExam() {
 //  RESULTS
 // ═══════════════════════════════════════════════
 function showResults(rec) {
+  lastExamRec = rec;
+  lastExamByQ = {};
+  (rec.results || []).forEach(r => { lastExamByQ[r.id] = r; });
   const pctEl = document.getElementById('res-score');
   pctEl.textContent = rec.pct + '%';
   pctEl.className = 'res-score ' + (rec.pass?'pass':'fail');
@@ -1009,7 +1084,7 @@ function showResults(rec) {
       <div class="r-ans" style="color:${r.correct?'var(--green)':'var(--red)'}">
         ${r.selected.join(',')||'—'} / ${r.answer.join(',')}
       </div>`;
-    div.onclick = () => beginPractice(r.id);
+    div.onclick = () => beginExamReview(r.id);
     list.appendChild(div);
   });
   activeTab = 'results';
@@ -1275,6 +1350,8 @@ async function boot() {
   // welcome stats
   document.getElementById('wlc-multi').textContent  = QS.filter(q=>q.type==='multi').length;
   document.getElementById('wlc-single').textContent = QS.filter(q=>q.type==='single').length;
+  document.getElementById('ex-order')?.addEventListener('change', toggleExamRangeUI);
+  toggleExamRangeUI();
   buildGrid();
   updateStats();
   showView('welcome');
