@@ -32,6 +32,19 @@
   --sidebar:  260px;
   --topbar:   54px;
 }
+
+:root[data-theme="light"] {
+  --bg:       #f6f8fa;
+  --surface:  #ffffff;
+  --surface2: #f0f4f8;
+  --surface3: #e6edf3;
+  --border:   #d0d7de;
+  --border2:  #e1e4e8;
+  --text:     #0d1117;
+  --text2:    #374151;
+  --text3:    #6b7280;
+  color-scheme: light;
+}
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
 
@@ -56,6 +69,18 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .tb-mode { font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 1.5px; padding: 4px 10px; border-radius: 4px; background: rgba(88,166,255,.12); color: var(--accent2); border: 1px solid rgba(88,166,255,.25); }
 .tb-mode.exam { background: rgba(248,81,73,.1); color: var(--red); border-color: rgba(248,81,73,.3); }
 .tb-mode.search-mode { background: rgba(240,165,0,.1); color: var(--accent); border-color: rgba(240,165,0,.3); }
+.tb-theme-btn { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 1.2px; padding: 4px 10px; border-radius: 4px; background: var(--surface2); color: var(--text2); border: 1px solid var(--border); cursor: pointer; transition: all .15s; user-select: none; }
+.tb-theme-btn { display: flex; align-items: center; gap: 8px; }
+.tb-theme-icon { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.tb-theme-icon svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tb-icon-sun  { display: none; }
+.tb-icon-moon { display: inline-flex; }
+.tb-theme-text { display: inline-block; }
+.tb-theme-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+.tb-theme-btn:focus-visible { outline: 2px solid rgba(88,166,255,.5); outline-offset: 2px; }
+
+:root[data-theme="light"] .tb-icon-sun  { display: inline-flex; }
+:root[data-theme="light"] .tb-icon-moon { display: none; }
 #timer { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--accent); display: none; min-width: 60px; text-align: right; }
 #timer.warn { color: #ff7b72; animation: blink .7s ease-in-out infinite; }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
@@ -164,7 +189,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .field.full { grid-column: 1/-1; }
 
 /* ── EXAM ACTIVE ── */
-#v-exam { /* same as practice layout */ }
+/* #v-exam: same as practice layout */
 .exam-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .exam-prog-text { font-family: var(--mono); font-size: 11px; color: var(--text3); }
 .exam-dots { display: flex; gap: 3px; flex-wrap: wrap; max-width: 300px; }
@@ -213,7 +238,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .h-badge.fail { background: rgba(248,81,73,.1); color: var(--red); border: 1px solid rgba(248,81,73,.25); }
 
 /* ── SEARCH RESULTS ── */
-#v-search { }
+/* #v-search: styles are defined in nested elements */
 .sr-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
 .sr-title { font-size: 16px; font-weight: 700; }
 .sr-count { font-family: var(--mono); font-size: 10px; padding: 3px 9px; border-radius: 4px; background: rgba(240,165,0,.1); color: var(--accent); border: 1px solid rgba(240,165,0,.25); }
@@ -275,6 +300,25 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     <button id="search-clear" onclick="clearSearch()">✕</button>
   </div>
   <div class="tb-right">
+    <button id="theme-toggle" class="tb-theme-btn" type="button" aria-label="Toggle light/dark theme" aria-pressed="false">
+      <span class="tb-theme-icon" aria-hidden="true">
+        <svg class="tb-icon-sun" viewBox="0 0 24 24">
+          <path d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z"/>
+          <path d="M12 2v2"/>
+          <path d="M12 20v2"/>
+          <path d="M4.93 4.93l1.41 1.41"/>
+          <path d="M17.66 17.66l1.41 1.41"/>
+          <path d="M2 12h2"/>
+          <path d="M20 12h2"/>
+          <path d="M4.93 19.07l1.41-1.41"/>
+          <path d="M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg class="tb-icon-moon" viewBox="0 0 24 24">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79Z"/>
+        </svg>
+      </span>
+      <span class="tb-theme-text">DARK</span>
+    </button>
     <div class="tb-mode" id="mode-label">PRACTICE</div>
     <div id="timer">00:00</div>
   </div>
@@ -1340,6 +1384,56 @@ document.addEventListener('keydown', e => {
     if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   examNav(-1);
   }
 });
+
+// ═══════════════════════════════════════════════
+//  THEME (light/dark)
+// ═══════════════════════════════════════════════
+const THEME_KEY = 'genai_quiz_theme';
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  const isLight = theme === 'light';
+  const label = btn.querySelector('.tb-theme-text');
+  if (label) label.textContent = isLight ? 'LIGHT' : 'DARK';
+  btn.setAttribute('aria-pressed', String(isLight));
+}
+
+function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (_) {}
+
+  const mql = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+  const resolved = (saved === 'light' || saved === 'dark')
+    ? saved
+    : (mql && mql.matches ? 'light' : 'dark');
+
+  applyTheme(resolved);
+
+  const btn = document.getElementById('theme-toggle');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const cur = document.documentElement.getAttribute('data-theme') || resolved;
+      const next = cur === 'light' ? 'dark' : 'light';
+      try { localStorage.setItem(THEME_KEY, next); } catch (_) {}
+      applyTheme(next);
+    });
+  }
+
+  // Keep in sync with system preference unless the user explicitly chose.
+  if (!saved && mql) {
+    const handler = () => {
+      let curSaved = null;
+      try { curSaved = localStorage.getItem(THEME_KEY); } catch (_) {}
+      if (curSaved) return;
+      applyTheme(mql.matches ? 'light' : 'dark');
+    };
+    if (mql.addEventListener) mql.addEventListener('change', handler);
+    else if (mql.addListener) mql.addListener(handler);
+  }
+}
+
+initTheme();
 
 // ═══════════════════════════════════════════════
 //  BOOT
