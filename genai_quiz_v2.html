@@ -103,7 +103,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
 
 /* ── SIDEBAR ── */
-.sb-nav { display: flex; gap: 2px; padding: 10px 10px 0; }
+.sb-nav { display: flex; gap: 2px; padding: 10px 10px 0; flex-wrap: wrap; }
 .sb-btn { flex: 1; padding: 7px 0; background: none; border: 1px solid transparent; border-radius: 5px; font-family: var(--sans); font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--text2); cursor: pointer; transition: all .15s; }
 .sb-btn.active { background: var(--surface3); border-color: var(--border); color: var(--text); }
 .sb-btn:hover:not(.active) { color: var(--text); background: var(--surface3); }
@@ -263,6 +263,21 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .h-badge.pass { background: rgba(63,185,80,.12); color: var(--green); border: 1px solid rgba(63,185,80,.25); }
 .h-badge.fail { background: rgba(248,81,73,.1); color: var(--red); border: 1px solid rgba(248,81,73,.25); }
 
+/* ── ALL QUESTIONS ── */
+#v-all { max-width: 980px; margin: 0 auto; padding-top: 6px; }
+.all-head { margin-bottom: 18px; }
+.all-head h2 { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+.all-sub { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 10px; }
+.all-note { font-size: 12px; color: var(--text3); line-height: 1.6; }
+.all-list { display: flex; flex-direction: column; gap: 14px; padding-bottom: 30px; }
+.all-q-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.all-q-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.all-q-meta .q-num-badge { margin-bottom: 0; }
+.all-q-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.all-opts { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 6px; }
+.all-opt-wrap .option { margin: 0; }
+.all-empty { text-align: center; color: var(--text3); padding: 30px 20px; font-size: 13px; }
+
 /* ── SEARCH RESULTS ── */
 /* #v-search: styles are defined in nested elements */
 .sr-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
@@ -371,6 +386,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
       <button class="sb-btn" id="tab-exam"     onclick="gotoTab('exam')">Exam</button>
       <button class="sb-btn" id="tab-history"  onclick="gotoTab('history')">History</button>
       <button class="sb-btn" id="tab-data"     onclick="gotoTab('data')">DB</button>
+      <button class="sb-btn" id="tab-all"      onclick="gotoTab('all')">All Qs</button>
     </div>
     <div class="sb-search-info" id="sb-search-info">Search results</div>
     <div id="q-grid"></div>
@@ -480,6 +496,16 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     <div id="v-history" class="view">
       <h2>Exam History</h2>
       <div id="history-list"></div>
+    </div>
+
+    <!-- ALL QUESTIONS -->
+    <div id="v-all" class="view">
+      <div class="all-head">
+        <h2>All Questions</h2>
+        <div class="all-sub">Scroll the list, select options, then use “Show Answer” and “Submit” for each question.</div>
+        <div class="all-note">Saved answers are stored in your browser’s IndexedDB (Practice).</div>
+      </div>
+      <div id="all-list" class="all-list"></div>
     </div>
 
     <!-- SEARCH -->
@@ -648,6 +674,12 @@ let eTimerFn  = null;
 let activeTab = 'practice';
 let searchResults = null; // null = not searching, [] = results
 
+    // ═══════════════════════════════════════════════
+    //  ALL QUESTIONS (list) STATE
+    // ═══════════════════════════════════════════════
+    let allSel = {};       // { [qId]: [letters] }
+    let allRevealed = {}; // { [qId]: boolean }
+
 let lastExamRec = null;   // most recently shown results record
 let lastExamByQ = {};     // { [qId]: {id, selected, correct, answer} }
 
@@ -731,7 +763,7 @@ function updateStats() {
 // ═══════════════════════════════════════════════
 function gotoTab(tab) {
   activeTab = tab;
-  ['practice','exam','history','data'].forEach(t => {
+  ['practice','exam','history','data','all'].forEach(t => {
     document.getElementById('tab-' + t)?.classList.toggle('active', t === tab);
   });
   // clear search when switching tabs
@@ -747,6 +779,10 @@ function gotoTab(tab) {
     document.getElementById('mode-label').textContent = 'PRACTICE';
     document.getElementById('pnav').classList.add('show');
     renderPractice();
+  } else if (tab === 'all') {
+    document.getElementById('mode-label').textContent = 'ALL QUESTIONS';
+    showView('all');
+    renderAllQuestions();
   } else if (tab === 'exam') {
     document.getElementById('mode-label').textContent = 'EXAM';
     document.getElementById('mode-label').classList.add('exam');
@@ -781,7 +817,7 @@ function beginPractice(qId) {
   pRevealed = false;
   pReviewMode = false;
   activeTab = 'practice';
-  ['practice','exam','history','data'].forEach(t => {
+  ['practice','exam','history','data','all'].forEach(t => {
     document.getElementById('tab-' + t)?.classList.toggle('active', t === 'practice');
   });
   document.getElementById('pnav').classList.add('show');
@@ -800,7 +836,7 @@ function beginExamReview(qId) {
   pRevealed = true;
   pReviewMode = true;
   activeTab = 'review';
-  ['practice','exam','history','data'].forEach(t => {
+  ['practice','exam','history','data','all'].forEach(t => {
     document.getElementById('tab-' + t)?.classList.toggle('active', false);
   });
   document.getElementById('pnav').classList.remove('show');
@@ -1001,6 +1037,187 @@ function navQ(dir) {
   if (n < 0 || n >= QS.length) return;
   pIdx = n; pSel = []; pRevealed = false;
   renderPractice();
+}
+
+// ═══════════════════════════════════════════════
+//  ALL QUESTIONS (list)
+// ═══════════════════════════════════════════════
+function renderAllQuestions() {
+  const list = document.getElementById('all-list');
+  if (!list) return;
+  list.innerHTML = '';
+  QS.forEach(q => {
+    const card = document.createElement('div');
+    card.className = 'all-q-card';
+    card.id = `all-q-${q.id}`;
+    list.appendChild(card);
+    renderAllCard(q);
+  });
+}
+
+function renderAllCard(q) {
+  const card = document.getElementById(`all-q-${q.id}`);
+  if (!card) return;
+
+  const qId = q.id;
+  const pr = practiceCache[qId];
+  const sel = pr
+    ? (Array.isArray(pr.selected) ? [...pr.selected] : [])
+    : (Array.isArray(allSel[qId]) ? [...allSel[qId]] : []);
+
+  const peeked = !pr && !!allRevealed[qId];
+  const locked = !!pr || peeked; // lock option clicks while answer is revealed or already saved
+
+  card.innerHTML = '';
+
+  const meta = document.createElement('div');
+  meta.className = 'all-q-meta';
+  const badge = document.createElement('div');
+  badge.className = `q-num-badge${q.type === 'multi' ? ' multi' : ''}`;
+  badge.textContent = `Q${qId}`;
+  meta.appendChild(badge);
+
+  const status = document.createElement('div');
+  status.className = 'exam-prog-text';
+  status.style.marginLeft = 'auto';
+  status.textContent = pr
+    ? (pr.correct ? 'Saved ✓' : 'Saved ✗')
+    : peeked
+      ? 'Answer Shown'
+      : 'Not Submitted';
+  meta.appendChild(status);
+
+  const textEl = document.createElement('div');
+  textEl.className = 'q-text';
+  textEl.textContent = q.text;
+
+  const optsEl = document.createElement('div');
+  optsEl.className = 'options-list';
+
+  Object.entries(q.options).forEach(([letter, text]) => {
+    const div = document.createElement('div');
+    div.className = 'option' + (locked ? ' locked' : '');
+    div.dataset.l = letter;
+
+    if (pr) {
+      // Saved answer: mark correct/wrong permanently
+      if (sel.includes(letter)) div.classList.add(q.correct.includes(letter) ? 'correct' : 'wrong');
+      else if (q.correct.includes(letter)) div.classList.add('missed');
+    } else if (peeked) {
+      // Revealed answer: mark correct/wrong for current selection + missed correct answers
+      if (sel.includes(letter)) div.classList.add(q.correct.includes(letter) ? 'correct' : 'wrong');
+      else if (q.correct.includes(letter)) div.classList.add('missed');
+    } else if (sel.includes(letter)) {
+      div.classList.add('selected');
+    }
+
+    div.innerHTML = `<div class="opt-key">${letter}</div><div class="opt-text">${esc(text)}</div>`;
+    if (!locked) div.addEventListener('click', () => handleAllSelect(q, letter));
+    optsEl.appendChild(div);
+  });
+
+  const acts = document.createElement('div');
+  acts.className = 'all-q-actions q-actions';
+
+  acts.innerHTML = '';
+
+  if (pr) {
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'btn btn-ghost';
+    resetBtn.textContent = 'Reset';
+    resetBtn.onclick = () => resetAllAnswer(qId);
+    acts.appendChild(resetBtn);
+  } else {
+    if (!peeked) {
+      const showBtn = document.createElement('button');
+      showBtn.className = 'btn btn-blue';
+      showBtn.innerHTML = '👁 Show Answer';
+      showBtn.onclick = () => { allRevealed[qId] = true; renderAllCard(q); };
+      acts.appendChild(showBtn);
+    } else {
+      const hideBtn = document.createElement('button');
+      hideBtn.className = 'btn btn-ghost';
+      hideBtn.textContent = '🙈 Hide Answer';
+      hideBtn.onclick = () => { allRevealed[qId] = false; renderAllCard(q); };
+      acts.appendChild(hideBtn);
+    }
+
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'btn btn-amber';
+    submitBtn.disabled = sel.length === 0;
+    submitBtn.textContent = sel.length === 0
+      ? 'Submit (select first)'
+      : `Submit (${sel.length} selected)`;
+    submitBtn.onclick = () => submitAllAnswer(qId);
+    acts.appendChild(submitBtn);
+
+    if (sel.length > 0) {
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'btn btn-ghost';
+      clearBtn.textContent = 'Clear';
+      clearBtn.onclick = () => { allSel[qId] = []; allRevealed[qId] = false; renderAllCard(q); };
+      acts.appendChild(clearBtn);
+    }
+  }
+
+  card.appendChild(meta);
+  card.appendChild(textEl);
+  card.appendChild(optsEl);
+  card.appendChild(acts);
+}
+
+function handleAllSelect(q, letter) {
+  const qId = q.id;
+  const pr = practiceCache[qId];
+  if (pr || allRevealed[qId]) return; // locked
+
+  let nextSel = Array.isArray(allSel[qId]) ? [...allSel[qId]] : [];
+  if (q.type === 'single') {
+    nextSel = [letter];
+  } else {
+    nextSel = nextSel.includes(letter) ? nextSel.filter(l => l !== letter) : [...nextSel, letter];
+  }
+  allSel[qId] = nextSel;
+  renderAllCard(q);
+}
+
+async function submitAllAnswer(qId) {
+  const q = QS.find(x => x.id === qId);
+  if (!q) return;
+
+  const pr = practiceCache[qId];
+  if (pr) return; // already saved
+
+  const sel = [...(allSel[qId] || [])].sort();
+  if (sel.length === 0) return;
+
+  const ans = [...q.correct].sort();
+  const isOk = JSON.stringify(sel) === JSON.stringify(ans);
+
+  const record = { id: q.id, selected: sel, correct: isOk, ts: Date.now() };
+  await dbPut('practice', record);
+  practiceCache[qId] = record;
+  allRevealed[qId] = false;
+
+  updateStats();
+  refreshGrid();
+  showToast(`Saved Q${qId} ${isOk ? 'correct ✓' : 'wrong ✗'}`);
+  renderAllCard(q);
+}
+
+async function resetAllAnswer(qId) {
+  const q = QS.find(x => x.id === qId);
+  if (!q) return;
+
+  await dbDelete('practice', qId);
+  delete practiceCache[qId];
+  allSel[qId] = [];
+  allRevealed[qId] = false;
+
+  updateStats();
+  refreshGrid();
+  showToast(`Reset Q${qId}`);
+  renderAllCard(q);
 }
 
 // ═══════════════════════════════════════════════
